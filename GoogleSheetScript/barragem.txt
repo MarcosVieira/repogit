@@ -244,7 +244,6 @@ function calcularPontuacaoJogo(jogo) {
   var time1 = jogo[1];
   var time2 = jogo[2];
   var timeVencedor = jogo[3];
-  var timePerdedor = (time1 == timeVencedor) ? time1 : time2;
 
   // obtem games do vencedor e do perdedor
   var match = placar.match(PADRAO_PLACAR);
@@ -256,12 +255,12 @@ function calcularPontuacaoJogo(jogo) {
   var desempenhoPerdedor = gamesPerdedor / (gamesVencedor + gamesPerdedor);
 
   // obtem pontuação atual dos times
-  var pontuacaoVencedor = obterPontuacaoTime(timeVencedor);
-  var pontuacaoPerdedor = obterPontuacaoTime(timePerdedor);
+  var pontuacaoTime1 = obterPontuacaoTime(time1);
+  var pontuacaoTime2 = obterPontuacaoTime(time2);
 
-
-
-  return jogo[1] == jogo[3] ? [1,0] : [0,1];
+  return (time1 == timeVencedor) ? 
+    [pontuacaoTime1 * (1 + desempenhoVencedor), pontuacaoTime2 * desempenhoPerdedor] :
+    [pontuacaoTime1 * desempenhoPerdedor, pontuacaoTime2 * (1 + desempenhoVencedor)];
 }
 
 function obterTime(nomeTime) {
