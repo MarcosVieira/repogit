@@ -1,0 +1,327 @@
+const PADRAO_PLACAR = /^(\d)x(\d)$/;
+const FATOR_K = 24;
+
+function formatarTexto(texto) {
+  return removerAcentos(texto).replace(/\s+/g, '');
+}
+
+function removerAcentos(texto) {
+  return texto.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function criarIdJogador(id) {
+  return formatarTexto(id);
+}
+
+function criarIdTime(id1, id2) {
+  var lista = [criarIdJogador(id1), criarIdJogador(id2)];
+  
+  lista.sort(function(a, b) {
+    return a.toString().localeCompare(b.toString());
+  });
+  
+  return lista.join("_");
+}
+
+function encontrarTabela(nomeAba, tituloTabela, quantidadeColunas) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(nomeAba);
+
+  // procura o texto na planilha inteira
+  var finder = ss.createTextFinder(tituloTabela).matchEntireCell(true);
+  var celulaEncontrada = finder.findNext();  
+  if (celulaEncontrada) {
+
+    // obter dados da tabela 
+    var linhaInicial = celulaEncontrada.getRow() + 2;
+    var dados = ss.getDataRange().getValues();
+
+    Logger.log("Dados da " + tituloTabela + " na aba " + nomeAba + " da linha " + linhaInicial + " até linha " + dados.length);
+
+    // selecionar o intervalo
+    return ss.getRange(linhaInicial, 1, (dados.length - linhaInicial) + 1, quantidadeColunas); 
+  } else {
+    return null;
+  }
+}
+
+function encontrarTabelaJogadores() {
+  return encontrarTabela("Jogadores", "Tabela de Jogadores", 8);
+}
+
+function encontrarTabelaTimes() {
+  return encontrarTabela("Times","Tabela de Times", 5);
+}
+
+function encontrarTabelaJogos() {
+  return encontrarTabela("Jogos","Tabela de Jogos", 6);
+}
+
+function zerarPontuacaoJogadores() {
+  var jogadores = encontrarTabelaJogadores();
+  if (jogadores != null) {
+    var values = jogadores.getValues();
+    for (var i = 0; i < values.length; i++) {
+      values[i][6] = 0; 
+    }
+  
+    // grava a matriz modificada na planilha
+    jogadores.setValues(values);    
+  } else {
+    Logger.log("Tabela de Jogadores não encontrada !!!");
+  }
+}
+
+function zerarPontuacaoTimes() {
+  var times = encontrarTabelaTimes();
+  if (times != null) {
+    var values = times.getValues();
+    for (var i = 0; i < values.length; i++) {
+      values[i][3] = 0; 
+    }
+  
+    // grava a matriz modificada na planilha
+    times.setValues(values);    
+  } else { 
+    Logger.log("Tabela de Times não encontrada !!!");
+  }
+}
+
+function zerarStatusJogos() {
+  var jogos = encontrarTabelaJogos();
+  if (jogos != null) {
+    var values = jogos.getValues();
+    for (var i = 0; i < values.length; i++) {
+      values[i][5] = ""; 
+    }
+  
+    // grava a matriz modificada na planilha
+    jogos.setValues(values);    
+  } else {
+    Logger.log("Tabela de Jogos não encontrada !!!");
+  }
+}
+
+function validarCalcularPontuacaoConfrontos() {
+  var jogos = encontrarTabelaJogos();
+  if (jogos != null) {
+    var values = jogos.getValues();
+    for (var i = 0; i < values.length; i++) {
+      
+      // verifica que o jogo ainda não foi processado
+      if (values[i][5] != "Ok") { 
+        var status = validarTimesPlacarJogo(values[i]); 
+
+        // nenhum erro ainda encontrado, avalia se confronto repetido no dia
+        if (status == "Ok") {
+
+          // percorre jogos subsequentes no mesmo dia
+          for (var j = i+1; j < values.length; j++) {
+
+            // verifica se jogos feitos no mesmo dia
+            if (Utilities.formatDate(values[i][0], Session.getScriptTimeZone(), "dd/MM/yyyy") == 
+              Utilities.formatDate(values[j][0], Session.getScriptTimeZone(), "dd/MM/yyyy")) {
+
+              // data do jogo é a mesma, pega times dos dois confrontos
+              var timesConfronto1 = [values[i][1], values[i][2]];
+              var timesConfronto2 = [values[j][1], values[j][2]];
+
+              // verifica se times dos dois confrontos são os mesmos
+              if (JSON.stringify(timesConfronto1.sort()) === JSON.stringify(timesConfronto2.sort())) {
+                status = "Times já se enfrentaram na mesma data";
+                break;
+              }
+            }  
+          }
+        }
+
+        // nenhum erro ainda encontrado, avalia repetição de jogador no confronto
+        if (status == "Ok") {
+          var jogadores = [...new Set(obterJogadoresTime(values[i][1]).concat(obterJogadoresTime(values[i][2])))];
+          if (jogadores.length != 4) {
+            status = "Jogador duplicado no confronto";
+          }
+        }
+
+        // verifica se status é OK para calcular pontuação dos times
+        if (status == "Ok") {
+          var pontuacao = calcularPontuacaoJogo(values[i]);
+          atualizarPontuacaoConfronto(values[i][1], pontuacao[0]);
+          atualizarPontuacaoConfronto(values[i][2], pontuacao[1]);
+        } 
+
+        // atualiza o status do jogo
+        values[i][5] = status;
+      }
+    }
+  
+    // grava a matriz modificada na planilha
+    jogos.setValues(values);    
+  } else {
+    Logger.log("Tabela de jogos não encontrada !!!");
+  }
+}
+
+function atualizarPontuacaoConfronto(nomeTime, pontos) {
+  var times = encontrarTabelaTimes();
+  if (times != null) {
+    var jogadoresTime = [];
+    var values = times.getValues();
+    for (var i = 0; i < values.length; i++) {
+      if (values[i][0] == nomeTime) {
+        values[i][3] += pontos;
+        jogadoresTime = [values[i][1], values[i][2]];
+        break;
+      }
+    }
+  
+    // grava a matriz modificada na planilha
+    times.setValues(values);
+
+    // adiciona pontuação para jogadores do time 
+    if (jogadoresTime.length > 0) {
+      var jogadores = encontrarTabelaJogadores();
+      if (jogadores != null) {
+        var values = jogadores.getValues();
+        for (var i = 0; i < values.length; i++) {
+          if (jogadoresTime.indexOf(values[i][1]) != -1) {
+            values[i][6] += pontos; 
+          }
+        }
+  
+        // grava a matriz modificada na planilha
+        jogadores.setValues(values);      
+      } else {
+        Logger.log("Tabela de Jogadores não encontrada !!!");
+      }
+    }    
+  } else { 
+    Logger.log("Tabela de Times não encontrada !!!");
+  }
+
+//  var jogadores = obterJogadoresTime(nomeTime);
+//  Logger.log("Atualizando pontuacao do time " + nomeTime + " e os jogadores [" + jogadores + "] em " + pontos);
+
+}
+
+function validarTimesPlacarJogo(jogo) {
+  var dataJogo = jogo[0]; 
+  var time1 = jogo[1];
+  var time2 = jogo[2];
+  var timeVencedor = jogo[3];
+  var placar = jogo[4];
+
+  Logger.log("Jogo em " + dataJogo + " entre " + time1 + " x " + time2 + " com vitória de " + timeVencedor + " por " + placar);
+
+  // verifica: não podem ser os mesmos times no confronto
+  if (time1 == time2) {
+    return "Um time não pode jogar contra si mesmo";
+  }
+
+  // verifica: o vencedor deve ser um dos times do confronto
+  if (timeVencedor != time1 && timeVencedor != time2) {
+    return "Vencedor informado não participou do confronto";
+  }
+
+  // verifica: o primeiro time deve existir
+  if (! seExisteTime(time1)) {
+    return "O primeiro time do confronto deve existir";
+  }
+
+  // verifica: o segundo time deve existir
+  if (! seExisteTime(time2)) {
+    return "O segundo time do confronto deve existir";
+  }
+
+  // verifica: placar do confronto deve ser válido para set "até 6"
+  if (! sePlacarValido(placar)) {
+    return "O placar informado não é válido";
+  }
+
+  return "Ok";
+}
+
+function calcularPontuacaoJogo(jogo) {
+  var time1 = jogo[1];
+  var time2 = jogo[2];
+  var timeVencedor = jogo[3];
+  var timePerdedor = (time1 == timeVencedor) ? time1 : time2;
+
+  // obtem games do vencedor e do perdedor
+  var match = placar.match(PADRAO_PLACAR);
+  var gamesVencedor = match[1];
+  var gamesPerdedor = match[2];
+
+  // calcula desempenho do vencedor e do perdedor
+  var desempenhoVencedor = gamesVencedor / (gamesVencedor + gamesPerdedor);
+  var desempenhoPerdedor = gamesPerdedor / (gamesVencedor + gamesPerdedor);
+
+  // obtem pontuação atual dos times
+  var pontuacaoVencedor = obterPontuacaoTime(timeVencedor);
+  var pontuacaoPerdedor = obterPontuacaoTime(timePerdedor);
+
+
+
+  return jogo[1] == jogo[3] ? [1,0] : [0,1];
+}
+
+function obterTime(nomeTime) {
+  Logger.log("Buscando time: " + nomeTime);
+  var times = encontrarTabelaTimes();
+  if (times != null) {
+    var time = times.getValues().filter(row => row[0] == nomeTime);
+    if (time.length > 0) {
+      Logger.log("Time encontrado: [" + time[0] + "]");
+      return time[0];
+    }
+    Logger.log("Time não encontrado: " + nomeTime);
+    return null;
+  } else {
+    Logger.log("Tabela de Times não encontrada !!!");
+    return null;
+  }
+}
+
+function seExisteTime(nomeTime) {
+  return obterTime(nomeTime) != null;
+}
+
+function obterJogadoresTime(nomeTime) {
+  var time = obterTime(nomeTime);
+  return (time == null) ? [] : [time[1], time[2]];
+}
+
+function obterPontuacaoTime(nomeTime) {
+  var time = obterTime(nomeTime);
+  return (time == null) ? 0 : time[3];
+}
+
+function sePlacarValido(placar) {
+  
+  // testa o padrão do placar
+  if (PADRAO_PLACAR.test(placar)) {
+    var match = placar.match(PADRAO_PLACAR);
+    var gamesVencedor = match[1];
+    var gamesPerdedor = match[2];
+    Logger.log("Placar do jogo [" + gamesVencedor + "x" + gamesPerdedor + "]");
+
+    // games do vendedor deve ser maior que o do perdedor
+    if (gamesVencedor <= gamesPerdedor) {
+      return false;
+    }
+
+    // testa placar para games do vencedor ser 7
+    if (gamesVencedor == 7) {
+      return gamesPerdedor >= 5;
+    }
+
+    // testa placar para games do vencedor ser 6
+    if (gamesVencedor != 6) {
+      return false;
+    }
+
+    // testa diferença de dois games
+    return gamesVencedor - gamesPerdedor >= 2;
+  } else {
+    return false;
+  }
+}
