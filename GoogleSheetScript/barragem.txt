@@ -1,5 +1,6 @@
 const PADRAO_PLACAR = /^(\d)x(\d)$/;
 const FATOR_K = 24;
+const PONTUACAO_INICIAL = 100;
 
 function formatarTexto(texto) {
   return removerAcentos(texto).replace(/\s+/g, '');
@@ -56,12 +57,12 @@ function encontrarTabelaJogos() {
   return encontrarTabela("Jogos","Tabela de Jogos", 6);
 }
 
-function zerarPontuacaoJogadores() {
+function iniciarPontuacaoJogadores() {
   var jogadores = encontrarTabelaJogadores();
   if (jogadores != null) {
     var values = jogadores.getValues();
     for (var i = 0; i < values.length; i++) {
-      values[i][6] = 0; 
+      values[i][6] = PONTUACAO_INICIAL; 
     }
   
     // grava a matriz modificada na planilha
@@ -71,12 +72,12 @@ function zerarPontuacaoJogadores() {
   }
 }
 
-function zerarPontuacaoTimes() {
+function iniciarPontuacaoTimes() {
   var times = encontrarTabelaTimes();
   if (times != null) {
     var values = times.getValues();
     for (var i = 0; i < values.length; i++) {
-      values[i][3] = 0; 
+      values[i][3] = PONTUACAO_INICIAL; 
     }
   
     // grava a matriz modificada na planilha
@@ -101,6 +102,11 @@ function zerarStatusJogos() {
   }
 }
 
+/**
+ * Percorre a tabela de confrontos (jogos), procurando por confronto que não esteja ok, isto é, ainda não foi processado ou apresentou erro
+ * no último processamento.
+ * Quando o status do confronto é assinalado com "ok", a pontuação dos times bem como jogadores envolvidos no confronto é atualizada.
+ */
 function validarCalcularPontuacaoConfrontos() {
   var jogos = encontrarTabelaJogos();
   if (jogos != null) {
@@ -151,6 +157,11 @@ function validarCalcularPontuacaoConfrontos() {
 
         // atualiza o status do jogo
         values[i][5] = status;
+
+        // para efeito de acompanhamento (debug), resultado do processamento do confronto é apresentado a partir da coluna K
+        var planilha = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Jogos");        
+        planilha.getRange(3+i,11).setValue(pontuacao[0]);        
+        planilha.getRange(3+i,12).setValue(pontuacao[1]);        
       }
     }
   
