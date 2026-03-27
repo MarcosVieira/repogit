@@ -197,10 +197,6 @@ function atualizarPontuacaoConfronto(nomeTime, pontos) {
   } else { 
     Logger.log("Tabela de Times não encontrada !!!");
   }
-
-//  var jogadores = obterJogadoresTime(nomeTime);
-//  Logger.log("Atualizando pontuacao do time " + nomeTime + " e os jogadores [" + jogadores + "] em " + pontos);
-
 }
 
 function validarTimesPlacarJogo(jogo) {
@@ -244,6 +240,7 @@ function calcularPontuacaoJogo(jogo) {
   var time1 = jogo[1];
   var time2 = jogo[2];
   var timeVencedor = jogo[3];
+  var placar = jogo[4];
 
   // obtem games do vencedor e do perdedor
   var match = placar.match(PADRAO_PLACAR);
@@ -259,8 +256,8 @@ function calcularPontuacaoJogo(jogo) {
   var pontuacaoTime2 = obterPontuacaoTime(time2);
 
   return (time1 == timeVencedor) ? 
-    [pontuacaoTime1 * (1 + desempenhoVencedor), pontuacaoTime2 * desempenhoPerdedor] :
-    [pontuacaoTime1 * desempenhoPerdedor, pontuacaoTime2 * (1 + desempenhoVencedor)];
+    [pontuacaoTime1+((pontuacaoTime2/FATOR_K)*desempenhoVencedor)+1, pontuacaoTime2-((pontuacaoTime1/FATOR_K)*desempenhoPerdedor)+1] :
+    [pontuacaoTime1-((pontuacaoTime2/FATOR_K)*desempenhoPerdedor)+1, pontuacaoTime2+((pontuacaoTime1/FATOR_K)*desempenhoVencedor)+1];
 }
 
 function obterTime(nomeTime) {
