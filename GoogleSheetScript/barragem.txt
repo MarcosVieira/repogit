@@ -36,8 +36,6 @@ function encontrarTabela(nomeAba, tituloTabela, quantidadeColunas) {
     var linhaInicial = celulaEncontrada.getRow() + 2;
     var dados = ss.getDataRange().getValues();
 
-    Logger.log("Dados da " + tituloTabela + " na aba " + nomeAba + " da linha " + linhaInicial + " até linha " + dados.length);
-
     // selecionar o intervalo
     return ss.getRange(linhaInicial, 1, (dados.length - linhaInicial) + 1, quantidadeColunas); 
   } else {
@@ -157,11 +155,6 @@ function validarCalcularPontuacaoConfrontos() {
 
         // atualiza o status do jogo
         values[i][5] = status;
-
-        // para efeito de acompanhamento (debug), resultado do processamento do confronto é apresentado a partir da coluna K
-        var planilha = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Jogos");        
-        planilha.getRange(3+i,11).setValue(pontuacao[0]);        
-        planilha.getRange(3+i,12).setValue(pontuacao[1]);        
       }
     }
   
@@ -179,7 +172,7 @@ function atualizarPontuacaoConfronto(nomeTime, pontos) {
     var values = times.getValues();
     for (var i = 0; i < values.length; i++) {
       if (values[i][0] == nomeTime) {
-        values[i][3] += pontos;
+        values[i][3] = Number(Math.max(values[i][3] + pontos, 1).toFixed(3));
         jogadoresTime = [values[i][1], values[i][2]];
         break;
       }
@@ -195,7 +188,7 @@ function atualizarPontuacaoConfronto(nomeTime, pontos) {
         var values = jogadores.getValues();
         for (var i = 0; i < values.length; i++) {
           if (jogadoresTime.indexOf(values[i][1]) != -1) {
-            values[i][6] += pontos; 
+            values[i][6] = Number(Math.max(values[i][6] + pontos, 1).toFixed(3)); 
           }
         }
   
@@ -216,8 +209,6 @@ function validarTimesPlacarJogo(jogo) {
   var time2 = jogo[2];
   var timeVencedor = jogo[3];
   var placar = jogo[4];
-
-  Logger.log("Jogo em " + dataJogo + " entre " + time1 + " x " + time2 + " com vitória de " + timeVencedor + " por " + placar);
 
   // verifica: não podem ser os mesmos times no confronto
   if (time1 == time2) {
@@ -266,21 +257,22 @@ function calcularPontuacaoJogo(jogo) {
   var pontuacaoTime1 = obterPontuacaoTime(time1);
   var pontuacaoTime2 = obterPontuacaoTime(time2);
 
-  return (time1 == timeVencedor) ? 
-    [pontuacaoTime1+((pontuacaoTime2/FATOR_K)*desempenhoVencedor)+1, pontuacaoTime2-((pontuacaoTime1/FATOR_K)*desempenhoPerdedor)+1] :
-    [pontuacaoTime1-((pontuacaoTime2/FATOR_K)*desempenhoPerdedor)+1, pontuacaoTime2+((pontuacaoTime1/FATOR_K)*desempenhoVencedor)+1];
+  // calcula variação de pontos dos times
+  var deltaPontuacaoTime1 = (time1 == timeVencedor) ? 
+    ((pontuacaoTime2/FATOR_K)*desempenhoVencedor) : -((pontuacaoTime2/FATOR_K)*desempenhoPerdedor);
+  var deltaPontuacaoTime2 = (time2 == timeVencedor) ?
+    ((pontuacaoTime1/FATOR_K)*desempenhoVencedor) : -((pontuacaoTime1/FATOR_K)*desempenhoPerdedor);
+
+  return [deltaPontuacaoTime1, deltaPontuacaoTime2];
 }
 
 function obterTime(nomeTime) {
-  Logger.log("Buscando time: " + nomeTime);
   var times = encontrarTabelaTimes();
   if (times != null) {
     var time = times.getValues().filter(row => row[0] == nomeTime);
     if (time.length > 0) {
-      Logger.log("Time encontrado: [" + time[0] + "]");
       return time[0];
     }
-    Logger.log("Time não encontrado: " + nomeTime);
     return null;
   } else {
     Logger.log("Tabela de Times não encontrada !!!");
@@ -309,7 +301,6 @@ function sePlacarValido(placar) {
     var match = placar.match(PADRAO_PLACAR);
     var gamesVencedor = match[1];
     var gamesPerdedor = match[2];
-    Logger.log("Placar do jogo [" + gamesVencedor + "x" + gamesPerdedor + "]");
 
     // games do vendedor deve ser maior que o do perdedor
     if (gamesVencedor <= gamesPerdedor) {
