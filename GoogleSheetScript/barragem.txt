@@ -323,3 +323,22 @@ function sePlacarValido(placar) {
     return false;
   }
 }
+
+function gerarJogos() {
+  var jogos = encontrarTabelaJogos();
+  if (jogos != null) {
+    var hoje = new Date();
+
+    var values = jogos.getValues();
+    var newValues = values.filter(function(row) {
+      return Utilities.formatDate(row[0], Session.getScriptTimeZone(), "dd/MM/yyyy") != 
+        Utilities.formatDate(hoje, Session.getScriptTimeZone(), "dd/MM/yyyy");
+    });
+  
+    // grava a matriz modificada na planilha
+    jogos.clearContent();
+    jogos.setValues(newValues);    
+  } else {
+    Logger.log("Tabela de Jogos não encontrada !!!");
+  }
+}
